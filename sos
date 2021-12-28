@@ -1,0 +1,211 @@
+#!/bin/bash
+
+# Function for basic system info
+basic () {
+echo "hostname: `cat $path/hostname`"
+echo "OS: `cat $path/etc/redhat-release`"
+echo "Date of sos: `cat $path/date`"
+echo "kernel: `cat $path/uname | awk '{print $3}'`"
+echo "ip addresses:"; cat $path/ip_addr | awk '$2 != "lo" && $3 ~ /inet$/ {print  $1,$2,$4}'
+echo "uptime:"; cat $path/uptime
+
+version=`awk '{print $3}' $path/uname |awk -F "." '{print $(NF-1)}'`
+#echo $version
+
+if [ "$version" == "el5" ]
+then 
+    echo "`cat $path/etc/sysconfig/clock | grep -i zone`"
+elif [ "$version" == "el6" ]
+then  
+    echo "`cat $path/etc/sysconfig/clock | grep -i zone`"
+else
+    echo "Timezone: `ls $path/usr/share/zoneinfo/*/* | awk -F "/" '{if ($(NF-1) == "zoneinfo"){print $NF}else{print $(NF-1) "/" $NF}}'`"
+fi
+}
+
+
+# Function for hardware information
+hardware () {
+printf "CPU: "; egrep -i "proc" $path/proc/cpuinfo | wc -l
+printf "Processor name: "; egrep -i  "model name" $path/proc/cpuinfo | sort -u | awk -F ":" '{print $2}'
+printf "Memory: "; egrep -i memtotal $path/proc/meminfo | awk '{printf "%s kB", $(NF-1)}'
+printf "\nHardware:\n"; egrep "Prod" $path/dmidecode | sort -u | awk '{ for (i=3; i<= NF; i++) printf "%s ", $i }'
+printf "\n"
+}
+
+# Function for usage
+usage () {
+printf "usage: sos -p <path> -b
+-p PATH
+   Specify path of the extracted sosreport. This is optional
+-b Displays basic system details. Can be used with -p
+-h help
+"
+}
+
+# Function to untar the log files
+untar () {
+for i in `ls $path/var/log/messages*`; do [[ "$i" =~ .*.bz2 ]] && bunzip2 $i;done
+for i in `ls $path/var/log/messages*`; do [[ "$i" =~ .*.gz ]] && gunzip $i;done
+}
+
+# Script starts here
+# settingh the default path and extracting the log files
+path="."
+untar
+# getops for script arguments
+while getopts ":p:sbh" opt; do
+  case $opt in 
+    p)
+      echo "${OPTARG}"
+      path="${OPTARG}" 
+    ;; 
+    b)
+      basic
+      exit 0
+    ;;
+    s)
+      hardware
+      exit 0
+    ;; 
+    h)
+      usage
+      exit 0
+    ;;
+    \?)
+      usage
+      exit 1
+    ;; 
+  esac;
+done
+
+# Displaying available options
+
+while true; do 
+printf "\noptions:
+1. nfs
+2. lvm
+3. disk 
+4. process
+5. file to open
+6. mountpoint
+7. dm id (just provide no)
+8. cifs
+c. Cancel
+"
+
+# actions to be performed
+
+read -p "option: " option
+case "$option" in 
+ [1])
+   untar
+   printf "\n/proc/mounts:\n"
+   cat $path/proc/self/mounts | awk '$3 ~ /nfs/ {print $1, $2,$3,$4}'
+   cat $path/var/log/messages | grep -i "nfs" | tail -20
+   printf "\nfstab entry:\n"; grep -i nfs $path/etc/fstab
+   printf "\nproc entry:\n";cat $path/proc/fs/nfsfs/servers
+   printf "\nNetWork State:\n";cat $path/sos_commands/networking/*-neopa | awk "NR == 2 || /2049/"
+   ;;
+ [2])
+   read -p "volume group: " vg
+   read -p "logical volume: " lv
+   [[ $lv ]] && { 
+   printf "\nfstab entry:\n"; grep -i "$lv" $path/etc/fstab; 
+   printf "\ndevice mapper:\n"; egrep -i "Maj|$vg-$lv" $path/sos_commands/devicemapper/dmsetup_info_-c;
+   printf "\n/proc/mounts:\n"; grep -w "$lv" $path/proc/mounts;
+   printf "\nlvs output:\n";egrep "Attr|$lv" $path/sos_commands/lvm2/lvs_-a_-o_lv*;
+   printf "\nblkid:\n"; egrep -i "$lv" $path/sos_commands/block/blkid_-c_.dev*;
+   }
+   [[ $lv ]] || { [[ $vg ]] && {
+   printf "\nvg details:\n"; egrep "VFree|$vg" $path/sos_commands/lvm2/vgs_-v_-o_vg*;   
+   printf "\nVolumes in vg:\n"; egrep -i "Attr|$vg" $path/sos_commands/lvm2/lvs_-a_-o_lv*;
+   printf "\nPhysical volume details:\n"; egrep -i "Attr|$vg" $path/sos_commands/lvm2/pvs_-a_-v*;
+   };}
+   ;;  
+  3)
+   read -p "disk name: " disk  
+   [[ $disk ]] && {
+   printf "\nblkid:\n"; egrep -i "$disk" $path/sos_commands/block/blkid_-c_.dev*;
+   printf "\nfdisk:";
+   for i in `ls $path/sos_commands/block/fdisk_-l_.dev.*`
+   do 
+    if [[ "$i" == *"$disk" ]]; then  
+      cat $i
+    fi
+   done;
+   printf "\ndisk path:\n"; egrep -i "$disk" $path/sos_commands/block/ls_-lanR_.sys.block; 
+   printf "\nPhysical volume details:\n"; egrep -i "Attr|$disk" $path/sos_commands/lvm2/pvs_-a_-v*;
+   printf "\ndm id of the disk:\n"; egrep -i "#blocks|$disk" $path/proc/partitions;
+   }
+   ;;
+  4)
+   printf "\nD state:\n"; awk 'NR == 1 || $8 ~ /D/ ' $path/sos_commands/process/ps_auxwww
+   read -p "process name:" process 
+   printf "\nstate:\n"; egrep -i "TTY|$process" $path/sos_commands/process/ps_auxwww
+   ;;
+  5)
+   ls $path/var/log/messages*
+   read -p "Name of the file to open: " filename
+   read -p "Enter the word you wanna grep: " word
+   if [[ -n $word ]]
+   then 
+    egrep -i "$word" $path/$filename 
+   else 
+    cat $path/$filename | less
+   fi
+   ;;
+  6)
+   read -p "name of the mountpoint: " mt
+   if [[ $mt != "" ]]; then
+   vg=$(egrep -w "$mt" $path/proc/self/mounts|cut -d " " -f 1 | cut -d "/" -f 4|awk -F "-" '{print $1}')
+   lv=$(egrep -w "$mt" $path/proc/self/mounts|cut -d " " -f 1 | cut -d "/" -f 4|awk -F "-" '{print $2}')
+   fs=$(egrep -w "$mt" $path/proc/self/mounts| awk '{print $3}')
+   if [[ $fs = xfs ]] || [[ $fs = ext* ]]; then 
+   printf "\ndf:\n"; egrep -i "Filesystem|$mt" $path/df;
+   printf "\ndf -i:\n"; egrep -i "Ifree|$mt" $path/sos_commands/filesys/df_-ali*;
+   printf "\n/proc/mounts:\n"; egrep -i "$mt" $path/proc/self/mounts;
+   printf "\nfstab:\n"; egrep -i "$mt" $path/etc/fstab;	
+   [[ $lv ]] && { printf "\ndevice mapper:\n"; egrep -i "Maj|$vg-$lv" $path/sos_commands/devicemapper/dmsetup_info_-c;}
+   [[ $lv ]] && { printf "\nlvs output:\n";egrep "Attr|$lv" $path/sos_commands/lvm2/lvs_-a_-o_lv*;} 
+   elif [[ -z "$fs" ]]; then 
+   echo $mt mountpoint does not exists
+   else
+   echo $fs is network filesystem
+   fi
+   else
+   echo mountpoint can not be blank
+   fi
+   ;;
+  7)
+   read -p "please enter dm id: " dm
+   if [[ $dm != "" ]]; then
+   lv=$(cat $path/sos_commands/devicemapper/dmsetup_info_-c | awk -v a="$dm" '$3 ~ a{print $1}')
+   if [ -z "$lv" ]; then 
+   printf "\ndf:\n"; egrep -i "Filesystem|$lv" $path/df
+   printf "\ndf -i:\n"; egrep -i "Filesystem|$lv" $path/sos_commands/filesys/df_-ali_-x_autofs
+   printf "\n/proc/mounts:\n"; egrep -i "$lv" $path/proc/self/mounts;
+   printf "\ndevice mapper:\n"; awk -v a="$dm" 'NR == 1 || $3 ~ a' $path/sos_commands/devicemapper/dmsetup_info_-c;
+   printf "\nlogs:\n"; egrep -i "mock|dm-$dm" $path/var/log/messages;
+   fi
+   else
+   echo dm id can not be blank
+   fi
+   ;;
+  8)
+   printf "\n/proc/mounts:\n"; cat $path/proc/self/mounts | awk '$3 ~ /cifs/ {print $1, $2,$3,$4}'
+   printf "\nlogs:\n"; cat $path/var/log/messages | grep -i "cifs" | tail -20
+   printf "\nfstab entry:\n"; grep -i cifs $path/etc/fstab
+   printf "\nNetWork State:\n";cat $path/sos_commands/networking/*-neopa | awk "NR == 2 || /:445/"
+   ;;
+  [c])
+   echo "Thank you"
+   exit 0
+   ;;
+  *)
+   echo "Incorrect option $option used
+valid options are 1,2 and c" 1>&2
+   exit 1
+   ;;
+esac;
+done
