@@ -2,11 +2,10 @@
 
 # Function for basic system info
 basic () {
-set +x
+
 echo "hostname: `cat $path/hostname`"
 echo "OS: `cat $path/etc/redhat-release`"
 echo "Date of sos: `cat $path/date`"
-set -x
 echo "kernel: `cat $path/uname | awk '{print $3}'`"
 echo "ip addresses:"; cat $path/ip_addr | awk '$2 != "lo" && $3 ~ /inet$/ {print  $1,$2,$4}'
 echo "uptime:"; cat $path/uptime
