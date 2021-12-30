@@ -2,9 +2,11 @@
 
 # Function for basic system info
 basic () {
+set +x
 echo "hostname: `cat $path/hostname`"
 echo "OS: `cat $path/etc/redhat-release`"
 echo "Date of sos: `cat $path/date`"
+set -x
 echo "kernel: `cat $path/uname | awk '{print $3}'`"
 echo "ip addresses:"; cat $path/ip_addr | awk '$2 != "lo" && $3 ~ /inet$/ {print  $1,$2,$4}'
 echo "uptime:"; cat $path/uptime
@@ -52,7 +54,6 @@ for i in `ls $path/var/log/messages*`; do [[ "$i" =~ .*.gz ]] && gunzip $i;done
 # Script starts here
 # settingh the default path and extracting the log files
 path="."
-untar
 # getops for script arguments
 while getopts ":p:sbh" opt; do
   case $opt in 
@@ -78,6 +79,9 @@ while getopts ":p:sbh" opt; do
     ;; 
   esac;
 done
+
+# untar gzip and bzip files in /var/log/messages
+untar
 
 # Displaying available options
 
@@ -139,9 +143,11 @@ case "$option" in
    printf "\ndm id of the disk:\n"; egrep -i "#blocks|$disk" $path/proc/partitions;
    }
    ;;
+
+# greps the processes in D state and allows you to search a process from ps o/p.
   4)
-   printf "\nD state:\n"; awk 'NR == 1 || $8 ~ /D/ ' $path/sos_commands/process/ps_auxwww
-   read -p "process name:" process 
+   printf "\nD state:\n"; awk 'NR == 1 || $8 ~ /D/ {printf "%s\n", $0}' $path/sos_commands/process/ps_auxwww
+	 read -p "process name:" process 
    printf "\nstate:\n"; egrep -i "TTY|$process" $path/sos_commands/process/ps_auxwww
    ;;
   5)
