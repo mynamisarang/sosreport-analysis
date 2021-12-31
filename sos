@@ -184,9 +184,9 @@ case "$option" in
    ;;
   7)
    read -p "please enter dm id: " dm
-   if [[ $dm != "" ]]; then
-   lv=$(cat $path/sos_commands/devicemapper/dmsetup_info_-c | awk -v a="$dm" '$3 ~ a{print $1}')
-   if [ -z "$lv" ]; then 
+	 if [[ $dm != "" ]]; then
+   lv=$(cat $path/sos_commands/devicemapper/dmsetup_info_-c | awk -v a="$dm" '$3 == a{print $1}')
+   if [ -n "$lv" ]; then 
    printf "\ndf:\n"; egrep -i "Filesystem|$lv" $path/df
    printf "\ndf -i:\n"; egrep -i "Filesystem|$lv" $path/sos_commands/filesys/df_-ali_-x_autofs
    printf "\n/proc/mounts:\n"; egrep -i "$lv" $path/proc/self/mounts;
