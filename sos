@@ -194,7 +194,7 @@ case "$option" in
    printf "\nlogs:\n"; egrep -i "mock|dm-$dm" $path/var/log/messages;
    fi
    else
-   echo dm id can not be blank
+   echo dm id can not be blank.please provide numaric value
    fi
    ;;
   8)
