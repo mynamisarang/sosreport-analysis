@@ -102,7 +102,6 @@ c. Cancel
 read -p "option: " option
 case "$option" in 
  [1])
-   untar
    printf "\n/proc/mounts:\n"
    cat $path/proc/self/mounts | awk '$3 ~ /nfs/ {print $1, $2,$3,$4}'
    cat $path/var/log/messages | grep -i "nfs" | tail -20
@@ -149,23 +148,37 @@ case "$option" in
 	 read -p "process name:" process 
    printf "\nstate:\n"; egrep -i "TTY|$process" $path/sos_commands/process/ps_auxwww
    ;;
+
   5)
-   ls $path/var/log/messages*
+	 for i in $(ls -d $path/var/log/messages*);do echo $i; (head -1 |awk '{print $1,$2,$3}'&& tail -1 |awk '{print $1,$2,$3}') < $i; printf "\n"; done
    read -p "Name of the file to open: " filename
    read -p "Enter the word you wanna grep: " word
-   if [[ -n $word ]]
+	 read -p "Enter the word you wanna exclude: " exclud
+	 if [[ -n $exclud ]]
    then 
-    egrep -i "$word" $path/$filename 
-   else 
-    cat $path/$filename | less
+	  echo exclude exists: $exclud
+    egrep -i "$word" $path/$filename | egrep -v "$exclud" | head -10
+	 elif [[ -z $word ]] && [[ -z $exclud ]]
+	 then 
+	  echo both word and exclude does not exist
+		less $path/$filename 	  
+	 elif [[ -z $exclud ]]
+	 then 
+	  echo exclude doesnot exists
+    egrep -i "$word" $path/$filename | head -10
    fi
-   ;;
-  6)
+   ;; 
+	
+	6)
    read -p "name of the mountpoint: " mt
    if [[ $mt != "" ]]; then
-   vg=$(egrep -w "$mt" $path/proc/self/mounts|cut -d " " -f 1 | cut -d "/" -f 4|awk -F "-" '{print $1}')
-   lv=$(egrep -w "$mt" $path/proc/self/mounts|cut -d " " -f 1 | cut -d "/" -f 4|awk -F "-" '{print $2}')
-   fs=$(egrep -w "$mt" $path/proc/self/mounts| awk '{print $3}')
+	 vg=$(awk -v a="$mt" '$2 == a{print $1}' $path/proc/self/mounts| cut -d "/" -f 4|awk -F "-" '{print $1}')
+   lv=$(awk -v a="$mt" '$2 == a{print $1}' $path/proc/self/mounts| cut -d "/" -f 4|awk -F "-" '{print $2}') 
+   lvm=$(awk -v a="$mt" '$2 == a{print $1}' $path/proc/self/mounts )
+	 fs=$(egrep -w "$lvm" $path/proc/self/mounts| awk '{print $3}')
+	 #vg=$(egrep -w "$mt" $path/proc/self/mounts|cut -d " " -f 1 | cut -d "/" -f 4|awk -F "-" '{print $1}')
+   #lv=$(egrep -w "$mt" $path/proc/self/mounts|cut -d " " -f 1 | cut -d "/" -f 4|awk -F "-" '{print $2}')
+   #fs=$(egrep -w "$mt" $path/proc/self/mounts| awk '{print $3}')
    if [[ $fs = xfs ]] || [[ $fs = ext* ]]; then 
    printf "\ndf:\n"; egrep -i "Filesystem|$mt" $path/df;
    printf "\ndf -i:\n"; egrep -i "Ifree|$mt" $path/sos_commands/filesys/df_-ali*;
