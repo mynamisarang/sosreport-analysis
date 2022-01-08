@@ -41,6 +41,7 @@ printf "usage: sos -p <path> -b
    Specify path of the extracted sosreport. This is optional
 -b Displays basic system details. Can be used with -p
 -h help
+-s Display basic system Hardware details
 "
 }
 
